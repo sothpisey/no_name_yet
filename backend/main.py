@@ -6,4 +6,4 @@ from security.token_handler import get_current_user
 app = FastAPI()
 
 app.include_router(get_access_token.router)
-app.include_router(get_user_info.router, dependencies=[Depends(get_current_user)])
+app.include_router(get_user_info.router)

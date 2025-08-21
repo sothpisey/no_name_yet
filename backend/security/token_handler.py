@@ -1,14 +1,17 @@
 # security/token_handler.py
-import jwt, base64, random, os
+import jwt, os
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 
 load_dotenv()
 
-#HS256_SECRET_KEY = base64.b64encode(random.randbytes(64)).decode('utf-8')
 HS256_SECRET_KEY = os.getenv("HS256_SECRET_KEY")
 ALGORITHM = 'HS256'
-JWT_TOKEN_EXPIRE_MINUTES = timedelta(minutes=60)
+JWT_TOKEN_EXPIRE_MINUTES = timedelta(minutes=int(os.getenv('TOKEN_EXPIRE_MINUTES')))
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 def generate_token(payload: dict, hs256_secret_key: str = HS256_SECRET_KEY, expires_delta: timedelta | None = None) -> str:
     payload = payload.copy()
@@ -28,11 +31,26 @@ def verify_token(jwt_token: str, hs256_secret_key: str = HS256_SECRET_KEY) -> bo
     except:
         return False
     
-def get_current_user(jwt_token: str) -> str:
+def get_current_user(jwt_token: str = Depends(oauth2_scheme)) -> str:
     try:
         payload = jwt.decode(jwt_token, HS256_SECRET_KEY, algorithms=[ALGORITHM])
-        return payload['username']
+        username: str = payload.get('username')
+        if username is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail='Invalid token: missing username',
+                headers={'WWW-Authenticate': 'Bearer'},
+            )
+        return username
     except jwt.ExpiredSignatureError:
-        raise Exception("Token has expired")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='Token expired',
+            headers={'WWW-Authenticate': 'Bearer'},
+        )
     except jwt.InvalidTokenError:
-        raise Exception("Invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
